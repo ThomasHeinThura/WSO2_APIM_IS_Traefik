@@ -55,11 +55,13 @@ WSO2_APIM_IS_Traefik/
 
 	The first boot takes a few minutes while MySQL initializes the schemas and WSO2 services perform their setup runs.
 
-3.1 Add /etc/hosts 
+3.1 Add /etc/hosts
 
-```
-192.168.107.3 api.example.com am.example.com iam.example.com traefik.example.com
-```
+	Add the following mapping to your `/etc/hosts` file (use `127.0.0.1` if running locally, or your server's IP):
+
+	```
+	127.0.0.1 api.example.com am.example.com iam.example.com traefik.example.com
+	```
 
 4. **Access the portals** (replace the hostnames with whatever you configured):
 
@@ -80,6 +82,7 @@ WSO2_APIM_IS_Traefik/
 
 ## Operational tips
 
+- **Re-running install.sh**: If you run `./install.sh` again, it may regenerate the self-signed certificate. If the certificate changes, you **must** rebuild the Docker images (`docker compose up -d --build`) so the new certificate is imported into the WSO2 truststores.
 - **TLS trust**: import the generated certificate from `config/traefik/certs/selfsigned.crt` into your OS/browser trust store or use tooling such as `mkcert`/`trust` to avoid warnings.
 - **Schema upgrades**: when you bump APIM/IS versions, re-apply the latest SQL scripts from the official repos to keep in sync, and re-run `install.sh` if the templates changed.
 - **Apple Silicon / ARM64**: the WSO2 base images are amd64-only, so the compose file pins those services to `linux/amd64`. Docker Desktop/OrbStack will take care of QEMU emulation; expect the first build to take slightly longer.
@@ -96,3 +99,71 @@ rm -f .env conf/apim/repository/conf/deployment.toml conf/is/repository/conf/dep
 > ⚠️ The cleanup command removes databases and configuration; run it only if you intend to reset the environment.
 
 
+---
+Add WSO2 IS to WSO2 APIM. 
+
+first search for wellknown. 
+
+```
+https://iam.<domain>/oauth2/token/.well-known/openid-configuration
+
+
+
+https://iam.example.com/oauth2/token/.well-known/openid-configuration
+```
+
+![alt text](image/image.png)
+
+Go to APIM admin portal `https://am.example.com/admin` and go to `key manager`
+![alt text](image/image_1.png)
+
+
+In keymanger -> add new key manager
+![alt text](image/image_2.png)
+
+Add wellknown and click import. all of the necessary config will import
+
+![alt text](image/image_3.png)
+
+You will left with `Scope Management Endpoint`
+
+```
+https://iam.example.com/api/identity/oauth2/v1.0/scopes
+```
+
+Add connector Connector Configurations and others
+```
+username - admin
+password - admin
+wso2 identity server 7 api management endpoint - https://iam.example.com/api/server/v1/api-resources
+
+wso2 identity server 7 role endpoint - https://iam.example.com/scim2/v2/Roles
+```
+![alt text](image/image_5.png)
+
+Click `Add` button. 
+
+---
+## Test the setup. 
+
+Go to the wso2 APIM, Devportal -> Application
+
+![alt text](image/image_6.png)
+
+Click any Application (`Default Application`). You can see `WSO2IS` as new key manager
+
+![alt text](image/image_7.png)
+
+After generate Key. You can see the client ID and Client Secret
+
+
+![alt text](image/image_8.png)
+
+That Id and key is the Same in WSo2 IS -> Application. 
+
+![alt text](image/image_9.png)
+
+![alt text](image/image_10.png)
+
+
+Users in Identity server can now call the APIs with that client ID and Client secret
