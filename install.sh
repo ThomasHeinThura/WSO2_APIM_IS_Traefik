@@ -3,7 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$ROOT_DIR/.env"
-ACME_FILE="$ROOT_DIR/data/letsencrypt/acme.json"
+CERT_DIR="$ROOT_DIR/config/traefik/certs"
+CERT_KEY="$CERT_DIR/selfsigned.key"
+CERT_CRT="$CERT_DIR/selfsigned.crt"
 APIM_TEMPLATE="$ROOT_DIR/templates/apim/repository/conf/deployment.toml.tpl"
 APIM_TARGET="$ROOT_DIR/conf/apim/repository/conf/deployment.toml"
 IS_TEMPLATE="$ROOT_DIR/templates/is/repository/conf/deployment.toml.tpl"
@@ -82,6 +84,81 @@ target_path.write_text(text)
 PY
 }
 
+build_san_list() {
+  local hosts=(
+    "$APIM_HOSTNAME"
+    "$APIM_GATEWAY_HOST"
+    "$APIM_WS_HOST"
+    "$APIM_WEBSUB_HOST"
+    "$IS_HOSTNAME"
+    "$TRAEFIK_DASHBOARD_HOST"
+    "$BASE_DOMAIN"
+    "localhost"
+  )
+  local san_list=""
+  local prefix=""
+  local host=""
+  for host in "${hosts[@]}"; do
+    [[ -z "$host" ]] && continue
+    if [[ ",${san_list}," == *",DNS:${host},"* ]]; then
+      continue
+    fi
+    san_list+="${prefix}DNS:${host}"
+    prefix=','
+  done
+  echo "$san_list"
+}
+
+ensure_self_signed_cert() {
+  mkdir -p "$CERT_DIR"
+  if [[ -f "$CERT_KEY" && -f "$CERT_CRT" ]]; then
+    info "Self-signed certificate already present at $CERT_CRT"
+    return
+  fi
+
+  if ! command -v openssl >/dev/null 2>&1; then
+    warn "openssl is not installed. Generate a PEM certificate and key manually inside $CERT_DIR"
+    return
+  fi
+
+  local san_list
+  san_list="$(build_san_list)"
+  if [[ -z "$san_list" ]]; then
+    warn "Could not determine subjectAltName entries for the certificate"
+    return
+  fi
+
+  local openssl_cfg
+  openssl_cfg="$(mktemp)"
+  cat > "$openssl_cfg" <<EOF
+[ req ]
+default_bits = 4096
+prompt = no
+default_md = sha256
+req_extensions = req_ext
+distinguished_name = dn
+
+[ dn ]
+CN = ${BASE_DOMAIN}
+
+[ req_ext ]
+subjectAltName = ${san_list}
+EOF
+
+  if ! openssl req -x509 -nodes -days 825 -newkey rsa:4096 \
+    -keyout "$CERT_KEY" \
+    -out "$CERT_CRT" \
+    -config "$openssl_cfg" >/dev/null 2>&1; then
+    rm -f "$openssl_cfg"
+    warn "Failed to generate self-signed certificate. Please create ${CERT_CRT##$ROOT_DIR/} and ${CERT_KEY##$ROOT_DIR/} manually."
+    return
+  fi
+
+  rm -f "$openssl_cfg"
+  chmod 600 "$CERT_KEY" "$CERT_CRT"
+  info "Generated self-signed certificate covering: ${san_list//DNS:/ }"
+}
+
 info() {
   echo -e "\033[1;34m[INFO]\033[0m $1"
 }
@@ -94,7 +171,6 @@ main() {
   echo "--- WSO2 APIM + IS + Traefik installer ---"
 
   prompt BASE_DOMAIN "Primary domain" "example.com"
-  prompt LETS_ENCRYPT_EMAIL "Let's Encrypt notification email" "admin@${BASE_DOMAIN}"
 
   local default_apim_host="am.${BASE_DOMAIN}"
   local default_gateway_host="api.${BASE_DOMAIN}"
@@ -127,7 +203,6 @@ main() {
   umask 077
   cat > "$ENV_FILE" <<EOF
 BASE_DOMAIN=$BASE_DOMAIN
-LETS_ENCRYPT_EMAIL=$LETS_ENCRYPT_EMAIL
 APIM_HOSTNAME=$APIM_HOSTNAME
 APIM_GATEWAY_HOST=$APIM_GATEWAY_HOST
 APIM_WS_HOST=$APIM_WS_HOST
@@ -148,6 +223,7 @@ IS_IDENTITY_DB=$IS_IDENTITY_DB
 IS_SHARED_DB=$IS_SHARED_DB
 TRAEFIK_HTTP_PORT=80
 TRAEFIK_HTTPS_PORT=443
+MYSQL_CONNECTOR_VERSION=9.2.0
 EOF
   info "Wrote environment file to $ENV_FILE"
 
@@ -169,12 +245,7 @@ EOF
   render_is_config
   info "Rendered Identity Server deployment.toml"
 
-  mkdir -p "$(dirname "$ACME_FILE")"
-  if [[ ! -f "$ACME_FILE" ]]; then
-    touch "$ACME_FILE"
-  fi
-  chmod 600 "$ACME_FILE"
-  info "Prepared ACME storage at $ACME_FILE"
+  ensure_self_signed_cert
 
   warn "Review .env and conf/* files before running docker compose up -d"
 }

@@ -21,13 +21,6 @@ providers:
     directory: /etc/traefik/dynamic
     watch: true
 
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      storage: /etc/traefik/acme/acme.json
-      httpChallenge:
-        entryPoint: web
-
 log:
   level: INFO
 

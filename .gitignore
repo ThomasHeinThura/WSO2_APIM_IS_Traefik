@@ -6,8 +6,10 @@
 conf/
 !conf/**/.gitkeep
 
-# Traefik ACME state
-/data/letsencrypt/
+# Traefik TLS material
+config/traefik/certs/*
+!config/traefik/certs/.gitkeep
+data/letsencrypt/
 
 # Logs and runtime artifacts
 logs/
