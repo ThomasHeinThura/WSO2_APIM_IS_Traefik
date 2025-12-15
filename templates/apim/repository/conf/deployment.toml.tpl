@@ -47,7 +47,7 @@ provider = "wso2"
 display_in_api_console = true
 description = "Default gateway profile"
 show_as_token_endpoint_url = true
-service_url = "https://__APIM_HOSTNAME__:${mgt.transport.https.port}/services/"
+service_url = "https://localhost:${mgt.transport.https.port}/services/"
 username= "${admin.username}"
 password= "${admin.password}"
 ws_endpoint = "ws://__APIM_WS_HOST__"
@@ -60,8 +60,14 @@ websub_event_receiver_https_endpoint = "https://__APIM_WEBSUB_HOST__"
 [apim.sync_runtime_artifacts.gateway]
 gateway_labels =["Default"]
 
-[apim.analytics]
+[apim.analytics]	
+enable = true	
+type = "elk"
+
+[apim.ai]
 enable = false
+key = ""
+endpoint = ""
 
 [apim.key_manager]
 enable_lightweight_apikey_generation = true
@@ -88,7 +94,7 @@ type = "org.wso2.carbon.identity.core.handler.AbstractIdentityHandler"
 name = "org.wso2.is.notification.ApimOauthEventInterceptor"
 order = 1
 [event_listener.properties]
-notification_endpoint = "https://__APIM_HOSTNAME__:${mgt.transport.https.port}/internal/data/v1/notify"
+notification_endpoint = "https://localhost:${mgt.transport.https.port}/internal/data/v1/notify"
 username = "${admin.username}"
 password = "${admin.password}"
 'header.X-WSO2-KEY-MANAGER' = "default"
