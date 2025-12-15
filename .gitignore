@@ -3,8 +3,8 @@
 .env.local
 
 # Generated WSO2 configs
-conf/
-!conf/**/.gitkeep
+/conf/
+!/conf/**/.gitkeep
 
 # Traefik TLS material
 config/traefik/certs/*
