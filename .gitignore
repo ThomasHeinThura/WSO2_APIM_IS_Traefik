@@ -1,0 +1,17 @@
+# Local environment and secrets
+.env
+.env.local
+
+# Generated WSO2 configs
+conf/
+!conf/**/.gitkeep
+
+# Traefik ACME state
+/data/letsencrypt/
+
+# Logs and runtime artifacts
+logs/
+*.log
+
+# Python cache from installer template rendering
+__pycache__/

@@ -1,0 +1,123 @@
+version: "3.9"
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+      - "--certificatesresolvers.letsencrypt.acme.email=${LETS_ENCRYPT_EMAIL}"
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./config/traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "./config/traefik/dynamic:/etc/traefik/dynamic:ro"
+      - "./data/letsencrypt:/etc/traefik/acme"
+    networks:
+      - wso2
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_DASHBOARD_HOST}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    command: ["mysqld", "--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+      - "MYSQL_USER=${MYSQL_USER}"
+      - "MYSQL_PASSWORD=${MYSQL_PASSWORD}"
+    volumes:
+      - "mysql-data:/var/lib/mysql"
+      - "./config/mysql/scripts:/docker-entrypoint-initdb.d:ro"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - wso2
+
+  wso2is:
+    image: ${IS_IMAGE}
+    container_name: wso2is
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - "NODE_IP=${NODE_IP}"
+    volumes:
+      - "./conf/is:/home/wso2carbon/wso2-config-volume"
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:9443/carbon/admin/login.jsp"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 240s
+    networks:
+      - wso2
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wso2is.rule=Host(`${IS_HOSTNAME}`)"
+      - "traefik.http.routers.wso2is.entrypoints=websecure"
+      - "traefik.http.routers.wso2is.tls=true"
+      - "traefik.http.routers.wso2is.tls.certresolver=letsencrypt"
+      - "traefik.http.services.wso2is.loadbalancer.server.port=9443"
+      - "traefik.http.services.wso2is.loadbalancer.server.scheme=https"
+      - "traefik.http.services.wso2is.loadbalancer.serverstransport=wso2-transport@file"
+
+  wso2apim:
+    image: ${APIM_IMAGE}
+    container_name: wso2apim
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      wso2is:
+        condition: service_started
+    environment:
+      - "NODE_IP=${NODE_IP}"
+    volumes:
+      - "./conf/apim:/home/wso2carbon/wso2-config-volume"
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:9443/carbon/admin/login.jsp"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    networks:
+      - wso2
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.apim-mgmt.rule=Host(`${APIM_HOSTNAME}`)"
+      - "traefik.http.routers.apim-mgmt.entrypoints=websecure"
+      - "traefik.http.routers.apim-mgmt.tls=true"
+      - "traefik.http.routers.apim-mgmt.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.apim-mgmt.service=apim-mgmt-https"
+      - "traefik.http.services.apim-mgmt-https.loadbalancer.server.port=9443"
+      - "traefik.http.services.apim-mgmt-https.loadbalancer.server.scheme=https"
+      - "traefik.http.services.apim-mgmt-https.loadbalancer.serverstransport=wso2-transport@file"
+      - "traefik.http.routers.apim-gateway.rule=Host(`${APIM_GATEWAY_HOST}`)"
+      - "traefik.http.routers.apim-gateway.entrypoints=websecure"
+      - "traefik.http.routers.apim-gateway.tls=true"
+      - "traefik.http.routers.apim-gateway.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.apim-gateway.service=apim-gateway-https"
+      - "traefik.http.services.apim-gateway-https.loadbalancer.server.port=8243"
+      - "traefik.http.services.apim-gateway-https.loadbalancer.server.scheme=https"
+      - "traefik.http.services.apim-gateway-https.loadbalancer.serverstransport=wso2-transport@file"
+
+networks:
+  wso2:
+    driver: bridge
+
+volumes:
+  mysql-data:

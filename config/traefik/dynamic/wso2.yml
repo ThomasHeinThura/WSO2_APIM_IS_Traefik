@@ -1,0 +1,3 @@
+serversTransports:
+  wso2-transport:
+    insecureSkipVerify: true
