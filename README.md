@@ -55,6 +55,12 @@ WSO2_APIM_IS_Traefik/
 
 	The first boot takes a few minutes while MySQL initializes the schemas and WSO2 services perform their setup runs.
 
+3.1 Add /etc/hosts 
+
+```
+192.168.107.3 api.example.com am.example.com iam.example.com traefik.example.com
+```
+
 4. **Access the portals** (replace the hostnames with whatever you configured):
 
 	- `https://am.example.com/publisher`, `https://am.example.com/devportal`, `https://am.example.com/admin`, `https://am.example.com/carbon`
@@ -88,3 +94,5 @@ rm -f .env conf/apim/repository/conf/deployment.toml conf/is/repository/conf/dep
 ```
 
 > ⚠️ The cleanup command removes databases and configuration; run it only if you intend to reset the environment.
+
+
